@@ -239,63 +239,37 @@ documented tolerances (see [Known limitations](#known-limitations)).
 
 ## Known limitations
 
-These are intentional, documented simplifications worth being able to
-explain rather than hide.
+Intentional, documented simplifications worth being able to explain
+rather than hide.
 
-### History: why cubic spline interpolation was tried, then reverted
+**Why linear interpolation, not cubic spline.** An earlier version used
+a cubic spline for smoothness, but it produced two concrete artifacts on
+this dataset: (1) a small artificial **dip** in the zero curve between
+the 6m and 1y pillars, whose rates are nearly identical (~1.99% vs
+~1.98%) — the spline invented a value neither pillar implied; (2) an
+**overshoot** in the forward curve between the widely-spaced 7y and 10y
+pillars, spiking to an implausible ~7%+. Linear interpolation (`np.interp`)
+can't produce either: a straight line between two points is always
+monotonic between them. `test_curve.py` confirms the fix — the flat-rate
+edge case error dropped from ~2bp (cubic spline) to ~1e-16 (linear).
 
-An earlier version of this project used a cubic spline for smoothness.
-Two concrete artifacts were found and measured before reverting to
-linear interpolation:
+**The remaining trade-off**: the zero curve is now piecewise-linear
+(small kinks at each pillar) and the forward curve is a step function
+(jumps at each pillar) rather than smooth. Every value is still one the
+pillar data genuinely implies — "kinked but truthful" was judged
+preferable to "smooth but occasionally wrong." A production curve
+builder wanting both would use a monotone-preserving interpolant (e.g.
+monotone cubic Hermite).
 
-1. **A dip the data never implied.** The 6m and 1y pillars have very
-   close continuously-compounded zero rates (~1.99% vs ~1.98%) — both
-   come from the *same* 2.00% simple input rate, just converted with a
-   different day-count fraction τ. A cubic spline fit through these two
-   near-flat points created a small artificial **dip** between them,
-   visible on the plotted curve, that was not implied by either pillar's
-   actual value.
-2. **An overshoot between widely-spaced pillars.** The forward curve
-   between the 7y and 10y pillars (the widest gap on the curve) spiked
-   to an economically implausible ~7%+, because cubic splines can
-   oscillate between two points that are far apart with little curvature
-   information between them.
-
-Both artifacts disappeared after switching to linear interpolation
-(`np.interp`): a straight line between two points is always monotonic
-between them, so it can never invent a value outside the range the
-pillars themselves imply. This was confirmed by `test_curve.py`: the
-flat-rate edge case error dropped from ~2bp (cubic spline) to ~1e-16
-(linear, i.e. floating-point precision) once the gap-filling and final
-interpolation both switched to linear.
-
-**The remaining trade-off**: linear interpolation makes the zero curve
-piecewise-linear (small kinks at each pillar) and the instantaneous
-forward curve a step function (constant within each pillar segment,
-with a jump at every pillar) rather than smooth. This is a real,
-visible-on-the-plot limitation — but unlike the cubic spline artifacts
-above, every value the step function takes is one that the pillar data
-genuinely implies; nothing is invented between pillars. For this
-project, "kinked but truthful" was judged preferable to "smooth but
-occasionally wrong." A production curve builder seeking both smoothness
-*and* no overshoot would reach for a monotone-preserving interpolant
-(e.g. monotone cubic Hermite) instead of either of these two extremes.
-
-### Gap-filling between sparse swap pillars is still technically extrapolation
-
-Swap pillars are not all consecutive integer years apart (3y → 5y → 7y →
-10y). Bootstrapping 5y needs a discount factor at 4y, which was never
-quoted. The algorithm fills this gap by linearly interpolating the
-*partial* set of pillars known so far — querying beyond the last known
-point (e.g. asking for 4y when only pillars up to 3y are known yet) is
-flat extrapolation, not true interpolation. With linear interpolation
-this is a much smaller concern than it was with a cubic spline (no
-overshoot risk), but it remains the reason the curve does not reprice
-its own 5y/7y/10y swap inputs to *exactly* zero NPV in `test_curve.py`
-(residuals of ~1e-4 to ~1e-3, still tiny, and documented with widened
-tolerances there). A fully rigorous fix would solve all unknown discount
-factors simultaneously (a global/iterative bootstrap) instead of
-building forward pillar-by-pillar.
+**Gap-filling is still technically extrapolation.** Swap pillars aren't
+all consecutive years apart (3y → 5y → 7y → 10y), so bootstrapping 5y
+needs a discount factor at 4y, which was never quoted — filled by
+interpolating only the *partial* pillar set known so far. This is why
+the curve doesn't reprice its 5y/7y/10y inputs to *exactly* zero NPV in
+`test_curve.py` (residuals of ~1e-4 to ~1e-3, tiny, documented with
+widened tolerances). A fully rigorous fix would solve all unknown
+discount factors simultaneously (a global/iterative bootstrap) instead
+of building forward pillar-by-pillar.
 
 ---
 
