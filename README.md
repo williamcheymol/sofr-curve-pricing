@@ -31,11 +31,11 @@ $$DF(T) = \frac{1}{1 + \text{rate} \cdot \tau}$$
 Swap tenors (1y and beyond) pay an annual fixed coupon, so the par
 condition involves a sum over all prior discount factors:
 
-$$\text{swap rate} \cdot \sum_i \tau_i \, DF(t_i) + DF(t_n) = 1$$
+$$\text{swap rate} \cdot \sum_i \tau_i \cdot DF(t_i) + DF(t_n) = 1$$
 
 Solving for the new (last) discount factor:
 
-$$DF(t_n) = \frac{1 - \text{swap rate} \cdot \sum_{i<n} \tau_i \, DF(t_i)}{1 + \text{swap rate} \cdot \tau_n}$$
+$$DF(t_n) = \frac{1 - \text{swap rate} \cdot \sum_{i<n} \tau_i \cdot DF(t_i)}{1 + \text{swap rate} \cdot \tau_n}$$
 
 Zero rates (continuous compounding) follow directly:
 
